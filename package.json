@@ -1,0 +1,35 @@
+{
+  "name": "facebook-jobs-automation",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.17.1",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "setup": "tsx scripts/setup.ts && corepack pnpm db:generate && corepack pnpm db:migrate && corepack pnpm db:seed",
+    "dev": "concurrently -n api,dashboard,worker -c blue,green,yellow \"corepack pnpm --filter @app/api dev\" \"corepack pnpm --filter @app/dashboard dev\" \"corepack pnpm --filter @app/worker dev\"",
+    "build": "corepack pnpm -r build",
+    "typecheck": "corepack pnpm -r typecheck",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "corepack pnpm --filter @repo/database generate",
+    "db:migrate": "corepack pnpm --filter @repo/database migrate",
+    "db:seed": "corepack pnpm --filter @repo/database seed",
+    "db:seed:demo": "corepack pnpm --filter @repo/database seed:demo",
+    "admin:create": "corepack pnpm --filter @repo/database admin:create",
+    "browser:install": "corepack pnpm --filter @repo/facebook-automation exec playwright install chromium"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.35.0",
+    "@types/node": "22.18.6",
+    "concurrently": "9.2.1",
+    "eslint": "9.35.0",
+    "globals": "16.4.0",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.44.1",
+    "tsup": "8.5.0",
+    "tsx": "4.20.5",
+    "vitest": "3.2.4"
+  }
+}

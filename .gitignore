@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+*.db
+*.db-journal
+*.db-wal
+data/browser-profile/
+data/screenshots/
+data/uploads/
+apps/dashboard/.vite/
+packages/database/src/generated/
+playwright-report/
+test-results/

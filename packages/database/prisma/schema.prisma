@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  activities   ActivityLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model FacebookSession {
+  id            String   @id @default(cuid())
+  status        String   @default("DISCONNECTED")
+  profilePath   String
+  lastCheckedAt DateTime?
+  lastConnectedAt DateTime?
+  manualReason  String?
+  updatedAt     DateTime @updatedAt
+}
+
+model SearchKeyword {
+  id             String         @id @default(cuid())
+  keyword        String         @unique
+  isActive       Boolean        @default(true)
+  priority       Int            @default(0)
+  lastSearchedAt DateTime?
+  groupsFound    Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  groups         GroupKeyword[]
+}
+
+model Group {
+  id                 String              @id @default(cuid())
+  facebookGroupId    String?             @unique
+  canonicalUrl       String              @unique
+  name               String
+  privacy            String?
+  visibility         String?
+  membersCount       Int?
+  activityPerDay     Float?
+  description        String?
+  location           String?
+  createdOnFacebook  DateTime?
+  score              Float?
+  decisionStatus     String              @default("NEW")
+  decisionReasonJson String?
+  membershipStatus   String              @default("NOT_JOINED")
+  postingEnabled     Boolean             @default(true)
+  minDaysBetweenPosts Int?
+  lastAnalyzedAt     DateTime?
+  discoveredAt       DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  keywords           GroupKeyword[]
+  metrics            GroupMetric[]
+  analyses           GroupAnalysis[]
+  rule                GroupRule?
+  membershipRequests MembershipRequest[]
+  campaignGroups     CampaignGroup[]
+  posts              Post[]
+  notes              GroupNote[]
+  blacklist          Blacklist?
+  errors             ErrorLog[]
+  screenshots        Screenshot[]
+  @@index([decisionStatus, membershipStatus])
+  @@index([score, membersCount])
+}
+
+model GroupKeyword {
+  groupId   String
+  keywordId String
+  foundAt   DateTime      @default(now())
+  group     Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  keyword   SearchKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  @@id([groupId, keywordId])
+}
+
+model GroupMetric {
+  id               String   @id @default(cuid())
+  groupId          String
+  membersCount     Int?
+  postsPerDay      Float?
+  recentPostScore  Float?
+  avgReactions     Float?
+  avgComments      Float?
+  keywordRelevance Float?
+  locationRelevance Float?
+  measuredAt       DateTime @default(now())
+  group            Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@index([groupId, measuredAt])
+}
+
+model GroupRule {
+  id                   String  @id @default(cuid())
+  groupId              String? @unique
+  minMembers           Int?
+  maxMembers           Int?
+  minActivityPerDay    Float?
+  minScore             Float   @default(60)
+  allowedPrivacyJson   String   @default("[\"PUBLIC\",\"PRIVATE\"]")
+  requireJobKeywords   Boolean  @default(true)
+  allowedKeywordsJson  String   @default("[]")
+  blockedKeywordsJson  String   @default("[]")
+  allowedLocationsJson String   @default("[]")
+  blockedLocationsJson String   @default("[]")
+  allowedJobTypesJson  String   @default("[]")
+  customPostRequired   Boolean  @default(false)
+  group                Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model GroupAnalysis {
+  id           String   @id @default(cuid())
+  groupId      String
+  score        Float
+  outcome      String
+  reasonsJson  String
+  snapshotJson String
+  createdAt    DateTime @default(now())
+  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@index([groupId, createdAt])
+}
+
+model MembershipRequest {
+  id            String                     @id @default(cuid())
+  groupId       String
+  status        String                     @default("NOT_JOINED")
+  requestedAt   DateTime?
+  lastCheckedAt DateTime?
+  checkCount    Int                        @default(0)
+  questionsHash String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  group         Group                      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  questions     MembershipQuestion[]
+  history       MembershipStatusHistory[]
+  @@index([status, lastCheckedAt])
+}
+
+model MembershipQuestion {
+  id          String             @id @default(cuid())
+  requestId   String
+  position    Int
+  text        String
+  type        String
+  optionsJson String?
+  required    Boolean            @default(true)
+  request     MembershipRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  answer      MembershipAnswer?
+  @@unique([requestId, position])
+}
+
+model MembershipAnswer {
+  id         String             @id @default(cuid())
+  questionId String             @unique
+  valueJson  String
+  createdAt  DateTime           @default(now())
+  question   MembershipQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model MembershipStatusHistory {
+  id        String            @id @default(cuid())
+  requestId String
+  fromStatus String?
+  toStatus  String
+  reason    String?
+  source    String
+  createdAt DateTime          @default(now())
+  request   MembershipRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id               String             @id @default(cuid())
+  title            String
+  company          String
+  city             String
+  area             String?
+  salary           String?
+  employmentType   String
+  experience       String?
+  gender           String?
+  ageRange         String?
+  description      String
+  requirements     String
+  benefits         String?
+  contactMethod    String
+  whatsapp         String?
+  phone            String?
+  email            String?
+  applyLink        String?
+  imagePath        String?
+  finalText        String
+  status           String             @default("DRAFT")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  targeting        JobTargetingRule?
+  campaigns        Campaign[]
+  posts            Post[]
+}
+
+model JobTargetingRule {
+  id                   String @id @default(cuid())
+  jobId                String @unique
+  locationsJson        String @default("[]")
+  requiredKeywordsJson String @default("[]")
+  minScore             Float?
+  minMembers           Int?
+  includeGroupIdsJson  String @default("[]")
+  excludeGroupIdsJson  String @default("[]")
+  job                  Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model PostTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Campaign {
+  id          String          @id @default(cuid())
+  jobId       String
+  status      String          @default("DRAFT")
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  job         Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  groups      CampaignGroup[]
+  posts       Post[]
+  @@index([status, scheduledAt])
+}
+
+model CampaignGroup {
+  campaignId String
+  groupId    String
+  selected   Boolean  @default(true)
+  reasonJson String?
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@id([campaignId, groupId])
+}
+
+model Post {
+  id             String              @id @default(cuid())
+  jobId          String
+  campaignId     String
+  groupId        String
+  status         String              @default("QUEUED")
+  content        String
+  facebookPostId String?
+  facebookUrl    String?
+  repostNumber   Int                 @default(0)
+  originalPostId String?
+  postedAt       DateTime?
+  approvedAt     DateTime?
+  lastCheckedAt  DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  job            Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  campaign       Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  group          Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  originalPost   Post?               @relation("Reposts", fields: [originalPostId], references: [id])
+  reposts        Post[]              @relation("Reposts")
+  history        PostStatusHistory[]
+  errors         ErrorLog[]
+  screenshots    Screenshot[]
+  @@unique([jobId, groupId, repostNumber])
+  @@index([status, lastCheckedAt])
+}
+
+model PostStatusHistory {
+  id         String   @id @default(cuid())
+  postId     String
+  fromStatus String?
+  toStatus   String
+  reason     String?
+  source     String
+  createdAt  DateTime @default(now())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model AutomationTask {
+  id             String       @id @default(cuid())
+  type           String
+  status         String       @default("QUEUED")
+  payloadJson    String
+  idempotencyKey String       @unique
+  priority       Int          @default(0)
+  attempts       Int          @default(0)
+  maxAttempts    Int          @default(3)
+  runAt          DateTime     @default(now())
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  heartbeatAt    DateTime?
+  lastError      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  errors         ErrorLog[]
+  screenshots    Screenshot[]
+  @@index([status, runAt, priority])
+  @@index([leaseExpiresAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  message   String
+  entityType String?
+  entityId  String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  @@index([readAt, createdAt])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  status     String?
+  detailsJson String?
+  source     String
+  userId     String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+model SystemSetting {
+  key       String   @id
+  valueJson String
+  updatedAt DateTime @updatedAt
+}
+
+model Blacklist {
+  id        String   @id @default(cuid())
+  groupId   String   @unique
+  reason    String
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model GroupNote {
+  id        String   @id @default(cuid())
+  groupId   String
+  text      String
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model ErrorLog {
+  id          String          @id @default(cuid())
+  type        String
+  message     String
+  technical   String?
+  stack       String?
+  groupId     String?
+  postId      String?
+  taskId      String?
+  retryCount  Int             @default(0)
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  group       Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  post        Post?           @relation(fields: [postId], references: [id], onDelete: SetNull)
+  task        AutomationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  screenshots Screenshot[]
+  @@index([resolvedAt, createdAt])
+}
+
+model Screenshot {
+  id        String          @id @default(cuid())
+  path      String
+  taskId    String?
+  groupId   String?
+  postId    String?
+  errorId   String?
+  createdAt DateTime        @default(now())
+  task      AutomationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  group     Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  post      Post?           @relation(fields: [postId], references: [id], onDelete: SetNull)
+  error     ErrorLog?       @relation(fields: [errorId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+}

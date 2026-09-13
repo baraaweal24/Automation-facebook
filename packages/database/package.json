@@ -1,0 +1,27 @@
+{
+  "name": "@repo/database",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "generate": "dotenv -e ../../.env -- prisma generate",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev --name init",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "seed:demo": "cross-env SEED_DEMO=true dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "admin:create": "dotenv -e ../../.env -- tsx prisma/create-admin.ts",
+    "build": "tsup src/index.ts --format esm --dts --external @prisma/client",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.2",
+    "argon2": "0.44.0"
+  },
+  "devDependencies": {
+    "prisma": "6.16.2",
+    "tsx": "4.20.5",
+    "cross-env": "10.0.0"
+    ,"dotenv-cli": "8.0.0"
+  },
+  "prisma": { "seed": "tsx prisma/seed.ts" }
+}
