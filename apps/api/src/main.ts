@@ -62,6 +62,14 @@ app.get('/api/auth/me', asyncRoute(async (req, res) => res.json({ user: req.user
 app.post('/api/auth/logout', asyncRoute(async (req, res) => { const token = req.cookies?.session as string | undefined; if (token) await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } }); res.clearCookie('session', { path: '/' }); res.json({ ok: true }); }));
 
 const paging = (query: unknown) => { const parsed = paginationSchema.parse(query); return { ...parsed, skip: (parsed.page - 1) * parsed.pageSize, take: parsed.pageSize }; };
+const serializeJob = <T extends { vacationSystemJson: string; conditionsJson: string; benefitsJson: string; requiredDocumentsJson: string; freeCoursesJson: string }>(job: T) => ({
+  ...job,
+  vacationSystem: parseJson(job.vacationSystemJson, []),
+  conditions: parseJson(job.conditionsJson, []),
+  benefitsList: parseJson(job.benefitsJson, []),
+  requiredDocuments: parseJson(job.requiredDocumentsJson, []),
+  freeCourses: parseJson(job.freeCoursesJson, []),
+});
 
 app.get('/api/dashboard', asyncRoute(async (_req, res) => {
   const [groups, accepted, rejected, joined, questions, jobs, posts, pendingPosts, errors, unread] = await Promise.all([prisma.group.count(), prisma.group.count({ where: { decisionStatus: { in: ['ACCEPTED_BY_RULES', 'MANUALLY_ACCEPTED'] } } }), prisma.group.count({ where: { decisionStatus: { in: ['REJECTED_BY_RULES', 'MANUALLY_REJECTED'] } } }), prisma.group.count({ where: { membershipStatus: 'JOINED' } }), prisma.membershipRequest.count({ where: { status: 'NEEDS_QUESTIONS' } }), prisma.job.count({ where: { status: 'ACTIVE' } }), prisma.post.count({ where: { status: { in: ['POSTED', 'APPROVED'] } } }), prisma.post.count({ where: { status: 'PENDING_ADMIN_APPROVAL' } }), prisma.errorLog.count({ where: { resolvedAt: null } }), prisma.notification.count({ where: { readAt: null } })]);
@@ -85,8 +93,18 @@ app.post('/api/groups/:id/blacklist', asyncRoute(async (req, res) => { if (!req.
 app.get('/api/membership/questions', asyncRoute(async (_req, res) => res.json(await prisma.membershipRequest.findMany({ where: { status: 'NEEDS_QUESTIONS' }, include: { group: true, questions: { include: { answer: true }, orderBy: { position: 'asc' } } }, orderBy: { updatedAt: 'asc' } }))));
 app.post('/api/membership/:id/answers', asyncRoute(async (req, res) => { const input = answersSchema.parse(req.body); const request = await prisma.membershipRequest.findUnique({ where: { id: req.params.id }, include: { questions: true } }); if (!request) throw new ApiError(404, 'NOT_FOUND', 'طلب الانضمام غير موجود.'); const valid = new Set(request.questions.map((question) => question.id)); if (input.answers.some((answer) => !valid.has(answer.questionId))) throw new ApiError(400, 'INVALID_ANSWER', 'توجد إجابة لا تنتمي إلى هذا الطلب.'); await prisma.$transaction(input.answers.map((answer) => prisma.membershipAnswer.upsert({ where: { questionId: answer.questionId }, create: { questionId: answer.questionId, valueJson: JSON.stringify(answer.value) }, update: { valueJson: JSON.stringify(answer.value) } }))); await prisma.membershipRequest.update({ where: { id: request.id }, data: { status: 'QUESTIONS_ANSWERED' } }); await core.log('MEMBERSHIP_ANSWERS_SAVED', 'MembershipRequest', request.id, req.user?.id); res.status(202).json(await core.enqueue('SUBMIT_GROUP_QUESTIONS', { requestId: request.id }, `answers:${request.id}:${request.questionsHash}`)); }));
 
-app.get('/api/jobs', asyncRoute(async (req, res) => { const q = paging(req.query); const where = q.search ? { title: { contains: q.search } } : {}; const [items, total] = await Promise.all([prisma.job.findMany({ where, skip: q.skip, take: q.take, orderBy: { createdAt: 'desc' }, include: { targeting: true, campaigns: true, _count: { select: { posts: true } } } }), prisma.job.count({ where })]); res.json({ items, total, page: q.page, pageSize: q.pageSize }); }));
-app.post('/api/jobs', asyncRoute(async (req, res) => { const { targeting, ...input } = jobCreateSchema.parse(req.body); const item = await prisma.job.create({ data: { ...input, targeting: targeting ? { create: { locationsJson: JSON.stringify(targeting.locations), requiredKeywordsJson: JSON.stringify(targeting.requiredKeywords), minScore: targeting.minScore, minMembers: targeting.minMembers, includeGroupIdsJson: JSON.stringify(targeting.includeGroupIds), excludeGroupIdsJson: JSON.stringify(targeting.excludeGroupIds) } } : undefined }, include: { targeting: true } }); await core.log('JOB_CREATED', 'Job', item.id, req.user?.id); res.status(201).json(item); }));
+app.get('/api/jobs', asyncRoute(async (req, res) => { const q = paging(req.query); const category = typeof req.query.category === 'string' ? req.query.category : undefined; const where = { ...(q.search ? { title: { contains: q.search } } : {}), ...(category ? { category } : {}) }; const [items, total] = await Promise.all([prisma.job.findMany({ where, skip: q.skip, take: q.take, orderBy: { createdAt: 'desc' }, include: { targeting: true, campaigns: true, _count: { select: { posts: true } } } }), prisma.job.count({ where })]); res.json({ items: items.map(serializeJob), total, page: q.page, pageSize: q.pageSize }); }));
+app.post('/api/jobs', asyncRoute(async (req, res) => {
+  const { targeting, vacationSystem, conditions, benefitsList, requiredDocuments, freeCourses, ...input } = jobCreateSchema.parse(req.body);
+  const item = await prisma.job.create({ data: {
+    ...input,
+    vacationSystemJson: JSON.stringify(vacationSystem), conditionsJson: JSON.stringify(conditions), benefitsJson: JSON.stringify(benefitsList),
+    requiredDocumentsJson: JSON.stringify(requiredDocuments), freeCoursesJson: JSON.stringify(freeCourses),
+    targeting: targeting ? { create: { locationsJson: JSON.stringify(targeting.locations), requiredKeywordsJson: JSON.stringify(targeting.requiredKeywords), minScore: targeting.minScore, minMembers: targeting.minMembers, includeGroupIdsJson: JSON.stringify(targeting.includeGroupIds), excludeGroupIdsJson: JSON.stringify(targeting.excludeGroupIds) } } : undefined,
+  }, include: { targeting: true } });
+  await core.log('JOB_CREATED', 'Job', item.id, req.user?.id, { category: item.category, title: item.title });
+  res.status(201).json(serializeJob(item));
+}));
 app.post('/api/jobs/:id/image', upload.single('image'), asyncRoute(async (req, res) => { if (!req.file) throw new ApiError(400, 'IMAGE_REQUIRED', 'الصورة مطلوبة.'); const item = await prisma.job.update({ where: { id: req.params.id }, data: { imagePath: req.file.path } }); await core.log('JOB_IMAGE_UPDATED', 'Job', item.id, req.user?.id); res.json({ imagePath: item.imagePath }); }));
 app.post('/api/jobs/:id/status', asyncRoute(async (req, res) => { const allowed = ['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED']; if (!allowed.includes(req.body.status)) throw new ApiError(400, 'INVALID_STATUS', 'حالة الوظيفة غير صالحة.'); const item = await prisma.job.update({ where: { id: req.params.id }, data: { status: req.body.status } }); await core.log('JOB_STATUS_CHANGED', 'Job', item.id, req.user?.id, req.body); res.json(item); }));
 

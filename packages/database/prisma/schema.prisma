@@ -192,19 +192,47 @@ model MembershipStatusHistory {
 
 model Job {
   id               String             @id @default(cuid())
+  category         String             @default("غير مصنف")
   title            String
-  company          String
+  company          String?
   city             String
   area             String?
   salary           String?
-  employmentType   String
+  salaryMin        Int?
+  salaryMax        Int?
+  salaryCurrency   String             @default("EGP")
+  employmentType   String?
   experience       String?
   gender           String?
   ageRange         String?
-  description      String
-  requirements     String
+  ageMin           Int?
+  ageMax           Int?
+  qualification    String?
+  minimumEducation String?
+  heightMinCm      Int?
+  heightMaxCm      Int?
+  description      String?
+  requirements     String?
   benefits         String?
-  contactMethod    String
+  vacationSystemJson String           @default("[]")
+  conditionsJson     String           @default("[]")
+  benefitsJson       String           @default("[]")
+  requiredDocumentsJson String        @default("[]")
+  freeCoursesJson    String           @default("[]")
+  drugTestRequired   Boolean          @default(false)
+  securityCheckRequired Boolean       @default(false)
+  firstTravelPayer   String?
+  travelCostMin      Int?
+  travelCostMax      Int?
+  housingProvided    Boolean          @default(false)
+  mealsPerDay        Int?
+  promotionAfterMonths Int?
+  sameDayTravel      Boolean          @default(false)
+  contractFromFirstDay Boolean        @default(false)
+  healthInsurance    Boolean          @default(false)
+  socialInsurance    Boolean          @default(false)
+  notes              String?
+  contactMethod    String?
   whatsapp         String?
   phone            String?
   email            String?

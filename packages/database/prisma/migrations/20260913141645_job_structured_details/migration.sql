@@ -1,0 +1,61 @@
+-- RedefineTables
+PRAGMA defer_foreign_keys=ON;
+PRAGMA foreign_keys=OFF;
+CREATE TABLE "new_Job" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "category" TEXT NOT NULL DEFAULT 'غير مصنف',
+    "title" TEXT NOT NULL,
+    "company" TEXT,
+    "city" TEXT NOT NULL,
+    "area" TEXT,
+    "salary" TEXT,
+    "salaryMin" INTEGER,
+    "salaryMax" INTEGER,
+    "salaryCurrency" TEXT NOT NULL DEFAULT 'EGP',
+    "employmentType" TEXT,
+    "experience" TEXT,
+    "gender" TEXT,
+    "ageRange" TEXT,
+    "ageMin" INTEGER,
+    "ageMax" INTEGER,
+    "qualification" TEXT,
+    "minimumEducation" TEXT,
+    "heightMinCm" INTEGER,
+    "heightMaxCm" INTEGER,
+    "description" TEXT,
+    "requirements" TEXT,
+    "benefits" TEXT,
+    "vacationSystemJson" TEXT NOT NULL DEFAULT '[]',
+    "conditionsJson" TEXT NOT NULL DEFAULT '[]',
+    "benefitsJson" TEXT NOT NULL DEFAULT '[]',
+    "requiredDocumentsJson" TEXT NOT NULL DEFAULT '[]',
+    "freeCoursesJson" TEXT NOT NULL DEFAULT '[]',
+    "drugTestRequired" BOOLEAN NOT NULL DEFAULT false,
+    "securityCheckRequired" BOOLEAN NOT NULL DEFAULT false,
+    "firstTravelPayer" TEXT,
+    "travelCostMin" INTEGER,
+    "travelCostMax" INTEGER,
+    "housingProvided" BOOLEAN NOT NULL DEFAULT false,
+    "mealsPerDay" INTEGER,
+    "promotionAfterMonths" INTEGER,
+    "sameDayTravel" BOOLEAN NOT NULL DEFAULT false,
+    "contractFromFirstDay" BOOLEAN NOT NULL DEFAULT false,
+    "healthInsurance" BOOLEAN NOT NULL DEFAULT false,
+    "socialInsurance" BOOLEAN NOT NULL DEFAULT false,
+    "notes" TEXT,
+    "contactMethod" TEXT,
+    "whatsapp" TEXT,
+    "phone" TEXT,
+    "email" TEXT,
+    "applyLink" TEXT,
+    "imagePath" TEXT,
+    "finalText" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+INSERT INTO "new_Job" ("ageRange", "applyLink", "area", "benefits", "city", "company", "contactMethod", "createdAt", "description", "email", "employmentType", "experience", "finalText", "gender", "id", "imagePath", "phone", "requirements", "salary", "status", "title", "updatedAt", "whatsapp") SELECT "ageRange", "applyLink", "area", "benefits", "city", "company", "contactMethod", "createdAt", "description", "email", "employmentType", "experience", "finalText", "gender", "id", "imagePath", "phone", "requirements", "salary", "status", "title", "updatedAt", "whatsapp" FROM "Job";
+DROP TABLE "Job";
+ALTER TABLE "new_Job" RENAME TO "Job";
+PRAGMA foreign_keys=ON;
+PRAGMA defer_foreign_keys=OFF;
