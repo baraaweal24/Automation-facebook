@@ -1,18 +1,22 @@
 import type { Page } from 'playwright';
 import { AutomationError } from './errors.js';
+import { assertFacebookReady } from './browser.js';
 
 export interface DiscoveredGroup { name: string; canonicalUrl: string; facebookGroupId?: string }
 
 export class FacebookSearchService {
-  constructor(private readonly page: Page) {}
+  constructor(private readonly page: Page, private guard: () => Promise<void> = async () => {}) {}
 
   async discover(keyword: string, options = { maxGroups: 50, maxIdleScrolls: 4, timeoutMs: 60_000 }): Promise<DiscoveredGroup[]> {
     const url = `https://www.facebook.com/search/groups/?q=${encodeURIComponent(keyword)}`;
     await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs });
+    await assertFacebookReady(this.page);
     const started = Date.now();
     const results = new Map<string, DiscoveredGroup>();
     let idle = 0;
     while (results.size < options.maxGroups && idle < options.maxIdleScrolls && Date.now() - started < options.timeoutMs) {
+      await this.guard();
+      await assertFacebookReady(this.page);
       const links = await this.page.locator('a[href*="/groups/"]').evaluateAll((anchors) => anchors.map((anchor) => ({ href: (anchor as HTMLAnchorElement).href, text: (anchor.textContent ?? '').trim() })));
       const before = results.size;
       for (const link of links) {

@@ -6,7 +6,11 @@ import { ApiError, parseJson } from './http.js';
 export class CoreService {
   readonly queue = new DatabaseQueue();
   log(action: string, entityType: string, entityId: string | null, userId?: string, details?: unknown) { return prisma.activityLog.create({ data: { action, entityType, entityId, userId, source: userId ? 'USER' : 'AUTOMATION', detailsJson: details ? JSON.stringify(details) : null } }); }
-  enqueue(type: TaskType, payload: unknown, key: string) { return this.queue.enqueue(type, payload, key); }
+  async enqueue(type: TaskType, payload: unknown, key: string) {
+    const raw=await prisma.systemSetting.findUnique({where:{key:'automationSettings'}});
+    const settings=raw ? JSON.parse(raw.valueJson) : {};
+    return this.queue.enqueue(type,payload,key,{maxAttempts:type==='JOIN_GROUP' ? settings.maxJoinAttempts ?? 3 : settings.retryCount ?? 3});
+  }
 
   async analyzeGroup(id: string, userId?: string) {
     const group = await prisma.group.findUnique({ where: { id }, include: { metrics: { orderBy: { measuredAt: 'desc' }, take: 1 } } });
@@ -18,7 +22,7 @@ export class CoreService {
     const scoring = calculateGroupScore(metrics, weights as typeof DEFAULT_WEIGHTS);
     const rules = (settings.globalGroupRules ?? defaultRules) as GroupRules;
     const result = evaluateGroupRules({ metrics, score: scoring.score, privacy: group.privacy, name: group.name, description: group.description, location: group.location }, rules);
-    const outcome = result.accepted ? 'ACCEPTED_BY_RULES' : 'REJECTED_BY_RULES';
+    const outcome = group.decisionStatus.startsWith('MANUALLY_') ? group.decisionStatus : result.accepted ? 'ACCEPTED_BY_RULES' : result.failures.some(reason => reason.includes('غير متاح')) ? 'NEW' : 'REJECTED_BY_RULES';
     await prisma.$transaction([
       prisma.group.update({ where: { id }, data: { score: scoring.score, decisionStatus: outcome, decisionReasonJson: JSON.stringify(result), lastAnalyzedAt: new Date() } }),
       prisma.groupAnalysis.create({ data: { groupId: id, score: scoring.score, outcome, reasonsJson: JSON.stringify(result), snapshotJson: JSON.stringify({ metrics, weights, scoring }) } }),

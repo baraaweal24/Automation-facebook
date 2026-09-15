@@ -275,11 +275,28 @@ model Campaign {
   scheduledAt DateTime?
   startedAt   DateTime?
   completedAt DateTime?
+  requestKey  String?         @unique
+  contentSnapshot String      @default("")
+  dryRun      Boolean         @default(true)
   createdAt   DateTime        @default(now())
   job         Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
   groups      CampaignGroup[]
   posts       Post[]
   @@index([status, scheduledAt])
+}
+
+model ContentDraft {
+  id String @id @default(cuid())
+  title String
+  sourceData String
+  instructions String @default("")
+  groupIdsJson String @default("[]")
+  finalText String @default("")
+  status String @default("DRAFT")
+  chatUrl String?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CampaignGroup {
@@ -294,6 +311,7 @@ model CampaignGroup {
 
 model Post {
   id             String              @id @default(cuid())
+  dispatchKey    String?             @unique
   jobId          String
   campaignId     String
   groupId        String

@@ -5,3 +5,5 @@ export * from './search.js';
 export * from './groups.js';
 export * from './membership.js';
 export * from './publisher.js';
+export * from './chatgpt.js';
+export * from './joined-groups.js';

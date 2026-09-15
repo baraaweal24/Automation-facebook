@@ -12,3 +12,11 @@ apps/dashboard/.vite/
 packages/database/src/generated/
 playwright-report/
 test-results/
+data/chatgpt-profile/
+data/backups/
+data/*.lock
+data/*.pid
+data/*.legacy-*
+*.tsbuildinfo
+*.before-restore-*
+*.restore-*

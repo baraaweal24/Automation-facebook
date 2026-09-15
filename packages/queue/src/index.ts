@@ -31,7 +31,7 @@ export class DatabaseQueue {
   }
 
   async complete(id: string, token: string) {
-    return prisma.automationTask.updateMany({ where: { id, leaseToken: token }, data: { status: 'COMPLETED', leaseToken: null, leaseExpiresAt: null } });
+    return prisma.automationTask.updateMany({ where: { id, leaseToken: token, status: 'RUNNING' }, data: { status: 'COMPLETED', leaseToken: null, leaseExpiresAt: null } });
   }
 
   async fail(id: string, token: string, message: string, manual = false) {
@@ -39,10 +39,28 @@ export class DatabaseQueue {
     const exhausted = task.attempts >= task.maxAttempts;
     const status = manual ? 'MANUAL_ACTION_REQUIRED' : exhausted ? 'FAILED' : 'RETRY';
     const delay = Math.min(60 * 60_000, 2 ** Math.max(task.attempts - 1, 0) * 5_000);
-    return prisma.automationTask.updateMany({ where: { id, leaseToken: token }, data: { status, lastError: message, runAt: new Date(Date.now() + delay), leaseToken: null, leaseExpiresAt: null } });
+    return prisma.automationTask.updateMany({ where: { id, leaseToken: token, status: 'RUNNING' }, data: { status, lastError: message, runAt: new Date(Date.now() + delay), leaseToken: null, leaseExpiresAt: null } });
+  }
+
+  async pause(id: string, token: string) {
+    return prisma.automationTask.updateMany({ where: { id, leaseToken: token, status: 'RUNNING' }, data: { status: 'PAUSED', attempts: { decrement: 1 }, leaseToken: null, leaseExpiresAt: null } });
   }
 
   async recoverExpired() {
-    return prisma.automationTask.updateMany({ where: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } }, data: { status: 'RETRY', leaseToken: null, leaseExpiresAt: null, lastError: 'Worker lease expired; reconciliation required.' } });
+    return prisma.$transaction(async tx => {
+      const expired = await tx.automationTask.findMany({ where: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } } });
+      for (const task of expired) {
+        const payload = JSON.parse(task.payloadJson) as { postId?: string };
+        const post = payload.postId ? await tx.post.findUnique({ where: { id: payload.postId } }) : null;
+        const uncertain = post?.status === 'POSTING';
+        const exhausted = task.attempts >= task.maxAttempts;
+        if (post && (uncertain || exhausted) && !['POSTED','APPROVED','PENDING_ADMIN_APPROVAL','WOULD_POST','SKIPPED'].includes(post.status)) {
+          const status = uncertain ? 'MANUAL_ACTION_REQUIRED' : 'FAILED';
+          await tx.post.update({ where: { id: post.id }, data: { status, history: { create: { fromStatus: post.status, toStatus: status, source: 'AUTOMATION', reason: 'انتهت مهلة العامل. تحقق من النتيجة قبل الإعادة.' } } } });
+        }
+        await tx.automationTask.update({ where: { id: task.id }, data: { status: uncertain ? 'MANUAL_ACTION_REQUIRED' : exhausted ? 'FAILED' : 'RETRY', leaseToken: null, leaseExpiresAt: null, lastError: 'Worker lease expired; reconciliation required.' } });
+      }
+      return { count: expired.length };
+    });
   }
 }

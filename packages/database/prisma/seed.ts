@@ -7,7 +7,7 @@ const settings = {
   automationSettings: { browserHeadless: false, maxGroupsPerSearch: 50, maxGroupsToAnalyzePerRun: 25, maxJoinAttempts: 10, maxPostsPerRun: 10, actionDelayMs: 3000, pageTimeoutMs: 45_000, retryCount: 3, pendingJoinRecheckMinutes: 360, pendingPostRecheckMinutes: 180, screenshotOnError: true, autoStartWorkers: false, browserConcurrency: 1 },
 };
 
-for (const [key, value] of Object.entries(settings)) await prisma.systemSetting.upsert({ where: { key }, create: { key, valueJson: JSON.stringify(value) }, update: { valueJson: JSON.stringify(value) } });
+for (const [key, value] of Object.entries(settings)) await prisma.systemSetting.upsert({ where: { key }, create: { key, valueJson: JSON.stringify(value) }, update: {} });
 for (const template of [
   { name: 'إعلان بسيط', body: 'مطلوب {{job_title}} للعمل لدى {{company}} في {{location}}.\n\nالمتطلبات:\n{{requirements}}\n\nللتقديم: {{apply_link}}' },
   { name: 'إعلان احترافي', body: 'فرصة عمل جديدة | {{job_title}}\n\nالشركة: {{company}}\nالموقع: {{location}}\nالراتب: {{salary}}\n\nالمتطلبات:\n{{requirements}}\n\nواتساب: {{whatsapp}}' },

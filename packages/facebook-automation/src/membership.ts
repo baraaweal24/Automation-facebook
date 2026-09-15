@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Locator, Page } from 'playwright';
 import { selectors } from './selectors.js';
+import { assertFacebookReady } from './browser.js';
 
 const firstVisible = async (page: Page, candidates: readonly string[]): Promise<Locator | null> => {
   for (const candidate of candidates) { const locator = page.locator(candidate).first(); if (await locator.isVisible().catch(() => false)) return locator; }
@@ -8,13 +9,15 @@ const firstVisible = async (page: Page, candidates: readonly string[]): Promise<
 };
 
 export class FacebookMembershipService {
-  constructor(private readonly page: Page) {}
+  constructor(private readonly page: Page, private guard: () => Promise<void> = async () => {}) {}
   async join(groupUrl: string, dryRun: boolean) {
     await this.page.goto(groupUrl, { waitUntil: 'domcontentloaded' });
-    if ((await this.page.getByText(/Joined|تم الانضمام/i).count()) > 0) return { status: 'JOINED' as const, questions: [] };
+    await assertFacebookReady(this.page);
+    if (await this.page.getByRole('button', { name: /^(Joined|تم الانضمام|منضم)$/i }).first().isVisible().catch(() => false)) return { status: 'JOINED' as const, questions: [] };
     const button = await firstVisible(this.page, selectors.joinButtons);
     if (!button) return { status: 'MANUAL_ACTION_REQUIRED' as const, questions: [] };
     if (dryRun) return { status: 'WOULD_JOIN' as const, questions: [] };
+    await this.guard();
     await button.click();
     await this.page.waitForTimeout(1000);
     const dialog = this.page.getByRole('dialog').last();
@@ -29,6 +32,8 @@ export class FacebookMembershipService {
 
   async submitAnswers(groupUrl: string, answers: Array<{ text: string; type: string; value: unknown }>, expectedHash: string) {
     await this.page.goto(groupUrl, { waitUntil: 'domcontentloaded' });
+    await assertFacebookReady(this.page);
+    await this.guard();
     const join = await firstVisible(this.page, selectors.joinButtons);
     if (join) await join.click();
     const dialog = this.page.getByRole('dialog').last();
@@ -45,6 +50,8 @@ export class FacebookMembershipService {
     }
     const submit = await firstVisible(this.page, selectors.submitAnswers);
     if (!submit) return { status: 'MANUAL_ACTION_REQUIRED' as const };
+    await assertFacebookReady(this.page);
+    await this.guard();
     await submit.click();
     return { status: 'WAITING_ADMIN' as const };
   }
